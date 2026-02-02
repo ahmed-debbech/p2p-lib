@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ahmed-debbech/p2p/model"
-	"github.com/ahmed-debbech/p2p/protocol"
+	"github.com/ahmed-debbech/p2p-lib/model"
+	"github.com/ahmed-debbech/p2p-lib/protocol"
 )
 
 var (

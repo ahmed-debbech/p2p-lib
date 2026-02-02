@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ahmed-debbech/p2p/model"
+	"github.com/ahmed-debbech/p2p-lib/model"
 	"github.com/google/uuid"
 )
 

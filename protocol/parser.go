@@ -4,7 +4,7 @@ import (
 	"errors"
 	"log"
 
-	"github.com/ahmed-debbech/p2p/utils"
+	"github.com/ahmed-debbech/p2p-lib/utils"
 )
 
 func ParseFrame(binFrame []byte) (Frame, error) {

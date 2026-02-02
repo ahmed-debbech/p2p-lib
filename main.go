@@ -4,8 +4,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/ahmed-debbech/p2p/peer"
-	"github.com/ahmed-debbech/p2p/stun"
+	"github.com/ahmed-debbech/p2p-lib/peer"
+	"github.com/ahmed-debbech/p2p-lib/stun"
 )
 
 func main() {
