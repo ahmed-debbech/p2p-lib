@@ -11,7 +11,7 @@ import (
 func main() {
 	log.Println("P2P - Hello World")
 
-	if len(os.Args) != 2 {
+	if len(os.Args) != 3 {
 		log.Fatal("wrong number of arguments")
 	}
 
@@ -21,6 +21,6 @@ func main() {
 	}
 	if os.Args[1] == "peer" {
 		log.Println("Running as peer")
-		peer.StartPeer()
+		peer.StartPeer(os.Args[2])
 	}
 }

@@ -23,7 +23,7 @@ var (
 	PeerWaitSeqNum time.Duration = 20 * time.Second
 )
 
-func StartPeer() {
+func StartPeer(x string) {
 
 	log.Println("Started as Peer")
 	lifetimeSocket, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(0, 0, 0, 0), Port: 0})
@@ -42,7 +42,9 @@ func StartPeer() {
 	}
 
 	log.Println("Peer found: ", peer.IP, ":", peer.Port)
-
+	if x == "x" {
+		time.Sleep(time.Second * 5)
+	}
 	sendCh := make(chan []byte)
 	recvCh := make(chan []byte)
 
@@ -65,19 +67,15 @@ func setupConnection(ctx context.Context, cancel context.CancelFunc, lifetimeSoc
 		return
 	}
 
-	onSync := make(chan struct{}, 1)
-	defer close(onSync)
+	onSyncRecv := make(chan struct{}, 1)
+	defer close(onSyncRecv)
+	onSyncRecv <- struct{}{}
+
+	onSyncSend := make(chan struct{}, 1)
+	defer close(onSyncSend)
 
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
-
-	var frameTimeout context.Context
-	var cancelFrameTimeout context.CancelFunc
-	defer func() {
-		if cancelFrameTimeout != nil {
-			cancelFrameTimeout()
-		}
-	}()
 
 	go func() {
 		defer close(recvCh)
@@ -92,34 +90,37 @@ func setupConnection(ctx context.Context, cancel context.CancelFunc, lifetimeSoc
 				return
 			default:
 			}
-			_, _, err := lifetimeSocket.ReadFromUDP(buffer)
-			if err != nil {
-				log.Printf("Error reading response from peer: %v", err)
-				return
-			}
-			frame, err := protocol.ParseFrame(buffer)
-			if err != nil {
-				log.Println(err)
-				return
+			<-onSyncRecv
+
+			var frame = protocol.Frame{}
+			for {
+				_, _, err := lifetimeSocket.ReadFromUDP(buffer)
+				if err != nil {
+					log.Printf("Error reading response from peer: %v", err)
+					return
+				}
+				frame, err := protocol.ParseFrame(buffer)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				seqRecv := frame.SequenceNumber
+				log.Println("received seq number", seqRecv, "from peer")
+
+				if nextSequenceNumber.Load() != seqRecv {
+					log.Println("error expected sequence number mismatch ", nextSequenceNumber.Load(), "!=", seqRecv, ".. ignoring")
+					// we should here ignore if it is not the expected sequence number
+					if seqRecv == 1 {
+						continue
+					}
+				}
+				break
 			}
 
-			seqRecv := frame.SequenceNumber
-			log.Println("received seq number", seqRecv, "from peer")
-			if cancelFrameTimeout != nil {
-				cancelFrameTimeout()
-			}
-			if nextSequenceNumber.Load() != seqRecv {
-				log.Println("error expected sequence number mismatch ", nextSequenceNumber.Load(), "!=", seqRecv, ".. break")
-				// we should here break the connection immediately if it is not the expected sequence number
-				return
-			}
 			log.Println("seq num matches with current", nextSequenceNumber.Load())
 
-			select {
-			case onSync <- struct{}{}:
-			default:
-			}
-
+			onSyncSend <- struct{}{}
 			if frame.PayloadLength == 0 {
 				continue //that's a heartbeat
 			}
@@ -139,18 +140,13 @@ func setupConnection(ctx context.Context, cancel context.CancelFunc, lifetimeSoc
 
 			case <-ctx.Done():
 				return
-			case <-onSync:
+			case <-onSyncSend:
 				nextSequenceNumber.Add(1)
 				if err := readFromSendChAndWriteUdp(sendCh, &nextSequenceNumber, lifetimeSocket, peerAddr); err != nil {
 					return
 				}
-				frameTimeout, cancelFrameTimeout = context.WithTimeout(context.Background(), PeerWaitSeqNum)
-				<-frameTimeout.Done() // wait for a response from peer
-				if frameTimeout.Err() == context.DeadlineExceeded {
-					//we waited long enough for peer to respond but yet they didn't
-					log.Println("didn't receive any new frames from peer after", PeerWaitSeqNum.String(), "timeout")
-					return
-				}
+				onSyncRecv <- struct{}{}
+
 			default:
 				if nextSequenceNumber.Load() == 1 {
 
